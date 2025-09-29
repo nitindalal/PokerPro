@@ -1,0 +1,4 @@
+- Engine code in `packages/engine` must be pure TypeScript (no DOM/async).
+- All state transitions go through reducer functions; avoid mutation.
+- Add/maintain unit tests when changing reducers.
+- UI consumes `computeLegalActions` and never constructs illegal actions.
