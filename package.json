@@ -6,7 +6,7 @@
     "build": "npm run -w packages/engine build && npm run -w apps/web build",
     "dev": "npm run -w apps/web dev",
     "test": "npm run -w packages/engine test",
-    "vercel-build": "cd apps/web && npm ci && npm run build"
+  "vercel-build": "cd apps/web && npm ci && npm run build && cp -r dist ../../dist || true"
   },
   "devDependencies": {
     "typescript": "^5.6.2"
