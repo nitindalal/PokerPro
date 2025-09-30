@@ -1,10 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import type { TableState, Card } from '@poker/engine';
 
-export default function Table({ state, onAction, onNextHand }:{ state: TableState; onAction: (type: string) => void; onNextHand?: () => void; }) {
+export default function Table({ state, onAction, onNextHand, onPlaceBet }:{ state: TableState; onAction: (type: string) => void; onNextHand?: () => void; onPlaceBet?: (size: number) => void }) {
   const n = state.players.length;
   const positions = useMemo(() => seatPositions(n), [n]);
   const legalNote = `Hand ${state.handId} • ${state.street.toUpperCase()}${state.street==='showdown'?' • Showdown':''}`;
+  const [betInput, setBetInput] = useState<string>('');
   return (
     <div style={{ fontFamily:'system-ui', padding:16 }}>
       <h2 style={{ margin:'0 0 12px 0' }}>Poker Practice</h2>
@@ -37,15 +38,45 @@ export default function Table({ state, onAction, onNextHand }:{ state: TableStat
           <ShowdownOverlay state={state} onNextHand={onNextHand} />
         )}
       </div>
-      <div style={{ marginTop:16, display:'flex', gap:8, justifyContent:'center', flexWrap:'wrap' }}>
-        <button onClick={()=>onAction('FOLD')}>Fold</button>
-        <button onClick={()=>onAction('CHECK')}>Check</button>
-        <button onClick={()=>onAction('CALL')}>Call</button>
-        <button onClick={()=>onAction('BET')}>Bet BB</button>
-        <button onClick={()=>onAction('RAISE')}>Raise Min</button>
+      <div style={{ marginTop:16, display:'flex', gap:8, justifyContent:'center', flexWrap:'wrap', alignItems:'center' }}>
+        <Button variant="muted" onClick={()=>onAction('FOLD')}>Fold</Button>
+        <Button variant="muted" onClick={()=>onAction('CHECK')}>Check</Button>
+        <Button variant="primary" onClick={()=>onAction('CALL')}>Call</Button>
+        <div style={{ display:'flex', gap:8, alignItems:'center' }}>
+          <input
+            type="number"
+            step={state.bigBlind}
+            min={state.minRaise ?? state.bigBlind}
+            value={betInput}
+            onChange={e=>{
+              // clamp to numeric and to min
+              const raw = e.target.value;
+              const n = Number(raw);
+              if (Number.isNaN(n)) { setBetInput(''); return; }
+              const min = state.minRaise ?? state.bigBlind;
+              setBetInput(String(Math.max(n, min)));
+            }}
+            placeholder={`${state.bigBlind}`}
+            style={{ width:100, padding:6, borderRadius:6, border:'1px solid rgba(255,255,255,0.12)', background:'#0b2f1c', color:'#fff' }}
+          />
+          <Button onClick={() => { const v = Number(betInput || state.bigBlind); if (onPlaceBet) onPlaceBet(v); }}>Bet</Button>
+        </div>
+        <Button variant="accent" onClick={()=>onAction('RAISE')}>Raise Min</Button>
       </div>
     </div>
   );
+}
+
+function Button({ children, onClick, variant='default' as 'default'|'primary'|'muted'|'accent' }:{ children: React.ReactNode; onClick?: () => void; variant?: 'default'|'primary'|'muted'|'accent' }) {
+  const base: React.CSSProperties = { padding:'8px 12px', borderRadius:8, border:'none', cursor:'pointer', fontWeight:700 };
+  const styles: Record<string, React.CSSProperties> = {
+    default: { background:'#111827', color:'#e5e7eb', boxShadow:'0 4px 12px rgba(0,0,0,0.35)' },
+    primary: { background:'#10b981', color:'#042f1f', boxShadow:'0 6px 18px rgba(16,185,129,0.12)' },
+    muted: { background:'#374151', color:'#e5e7eb' },
+    accent: { background:'#ffd66b', color:'#111' },
+  };
+  const style = { ...base, ...(styles[variant] || styles.default) };
+  return <button style={style} onClick={onClick}>{children}</button>;
 }
 
 function Board({ board }:{ board: Card[] }) {

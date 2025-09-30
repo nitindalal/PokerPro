@@ -17,7 +17,9 @@ describe('state', () => {
     let s = createTable(basePlayers, { smallBlind:50, bigBlind:100, seed:'seed' });
     s = postBlinds(s);
     expect(s.players[1].committed).toBe(50);
-    expect(s.players[0].committed + s.players[1].committed).toBe(150);
-    expect(s.pot).toBe(150);
+  expect(s.players[0].committed + s.players[1].committed).toBe(150);
+  // Committed chips should not yet be moved into the pot until the betting
+  // round is resolved by maybeAdvanceStreet.
+  expect(s.pot).toBe(0);
   });
 });

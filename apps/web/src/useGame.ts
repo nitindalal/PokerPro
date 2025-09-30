@@ -8,13 +8,15 @@ function randomPick<T>(arr: T[]): T | undefined {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-export function useGame() {
+export function useGame(numBots = 2) {
   const [state, setState] = useState<TableState>(() => {
-    const s = createTable([
-      { id:'H', name:'You', seat:0, stack:10000, isHuman:true },
-      { id:'B1', name:'Bot1', seat:1, stack:10000, isHuman:false },
-      { id:'B2', name:'Bot2', seat:2, stack:10000, isHuman:false }
-    ], { smallBlind:50, bigBlind:100, seed:'demo' });
+    // Build players: one human (seat 0) and `numBots` bots in seats 1..N
+    const players = [{ id: 'H', name: 'You', seat: 0, stack: 10000, isHuman: true }];
+    for (let i = 1; i <= numBots; i++) players.push({ id: `B${i}`, name: `Bot${i}`, seat: i, stack: 10000, isHuman: false });
+  // Use a randomized seed so each session gets a shuffled deck. We still keep
+  // the ability to override with an environment-like value if needed.
+  const seed = (typeof window !== 'undefined' && (window as any).__SEED_OVERRIDE__) || `s-${Date.now()}-${Math.floor(Math.random()*1e9)}`;
+  const s = createTable(players, { smallBlind: 50, bigBlind: 100, seed });
     return maybeAdvanceStreet(postBlinds(dealHole(s)));
   });
 
