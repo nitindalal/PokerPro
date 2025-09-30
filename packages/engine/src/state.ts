@@ -67,6 +67,12 @@ export function applyAction(state: TableState, playerIndex: number, action: Acti
   }
   if (action.type === 'CALL') {
     const toCall = maxCommitted(s) - p.committed;
+    if (toCall <= 0) {
+      // Nothing to call; treat as CHECK
+      s.handHistory.push({ handId: s.handId, actor: p.id, street: s.street, type: 'CHECK', ts: Date.now() });
+      s.toActIndex = nextActiveIndex(s, playerIndex + 1);
+      return s;
+    }
     const size = Math.min(toCall, p.stack);
     postBet(s, playerIndex, size);
     s.handHistory.push({ handId: s.handId, actor: p.id, street: s.street, type: 'CALL', size, ts: Date.now() });
@@ -76,11 +82,29 @@ export function applyAction(state: TableState, playerIndex: number, action: Acti
   if (action.type === 'BET' || action.type === 'RAISE') {
     const size = action.size ?? 0;
     if (size <= 0) throw new Error('Invalid bet/raise size');
-    postBet(s, playerIndex, size);
-    s.minRaise = size; // placeholder; refine for true min-raise rules
-    s.handHistory.push({ handId: s.handId, actor: p.id, street: s.street, type: action.type, size, ts: Date.now() });
-    s.toActIndex = nextActiveIndex(s, playerIndex + 1);
-    return s;
+    const currentHighest = Math.max(...s.players.map(pp=>pp.committed));
+    const toCall = currentHighest - p.committed;
+    if (toCall <= 0) {
+      // This is a BET (opening the round)
+      // Enforce size at least bigBlind
+      if (size < s.bigBlind) throw new Error('Bet size below big blind');
+      postBet(s, playerIndex, size);
+      s.minRaise = Math.max(s.minRaise, size);
+      s.handHistory.push({ handId: s.handId, actor: p.id, street: s.street, type: 'BET', size, ts: Date.now() });
+      s.toActIndex = nextActiveIndex(s, playerIndex + 1);
+      return s;
+    } else {
+      // This is a RAISE: player must at least call then add raise increment
+      const minRaiseAmount = s.minRaise ?? s.bigBlind;
+      const required = toCall + minRaiseAmount;
+      if (size < required) throw new Error('Raise size below minimum');
+      postBet(s, playerIndex, size);
+      // Update minRaise to the increment amount (size - toCall)
+      s.minRaise = Math.max(s.minRaise, size - toCall);
+      s.handHistory.push({ handId: s.handId, actor: p.id, street: s.street, type: 'RAISE', size, ts: Date.now() });
+      s.toActIndex = nextActiveIndex(s, playerIndex + 1);
+      return s;
+    }
   }
   return s;
 }
@@ -92,12 +116,33 @@ export function maybeAdvanceStreet(state: TableState): TableState {
   if (active.length <= 1) { return showdown(s); }
   const equalized = s.players.every(p => p.hasFolded || p.allIn || p.committed === maxCommitted(s));
   if (!equalized) return s;
+  // Require that each active (not folded, not all-in) player has at least one
+  // action recorded on this street before auto-advancing. This ensures that
+  // players get an opportunity to 'check' if there is no outstanding bet.
+  // Exceptions: if all active players are all-in (no actions possible) or
+  // only one active player remains (handled above as showdown).
+  const activePlayers = s.players.filter(p => !p.hasFolded);
+  const allActiveAllIn = activePlayers.length > 0 && activePlayers.every(p => p.allIn);
+  if (!allActiveAllIn) {
+    const actorsWithActions = new Set(s.handHistory
+      .filter(a => a.handId === s.handId && a.street === s.street)
+      .map(a => a.actor));
+    const requiredActors = activePlayers.filter(p => !p.allIn).map(p => p.id);
+    const allHaveActed = requiredActors.every(id => actorsWithActions.has(id));
+    if (!allHaveActed) return s;
+  }
   // Move committed to pot, reset committed, deal board cards
   const roundSum = s.players.reduce((a,p)=>a+p.committed,0);
   s.pot += roundSum; s.players.forEach(p=>p.committed=0);
-  if (s.street === 'preflop') { s.board.push(take(s), take(s), take(s)); s.street = 'flop'; s.toActIndex = firstToActPostflop(s); }
-  else if (s.street === 'flop') { s.board.push(take(s)); s.street = 'turn'; s.toActIndex = firstToActPostflop(s); }
-  else if (s.street === 'turn') { s.board.push(take(s)); s.street = 'river'; s.toActIndex = firstToActPostflop(s); }
+  // Reset per-round raise tracking when we move to the next betting round.
+  // Without this, a large raise on one street can force subsequent streets to
+  // require that same large amount to open (because computeLegalActions uses
+  // Math.max(bigBlind, minRaise) when offering a BET). Resetting to the
+  // big blind implements the typical behaviour where each betting round
+  // starts with a minimum bet equal to the big blind.
+  if (s.street === 'preflop') { s.board.push(take(s), take(s), take(s)); s.street = 'flop'; s.toActIndex = firstToActPostflop(s); s.minRaise = s.bigBlind; s.lastAggressorIndex = undefined; }
+  else if (s.street === 'flop') { s.board.push(take(s)); s.street = 'turn'; s.toActIndex = firstToActPostflop(s); s.minRaise = s.bigBlind; s.lastAggressorIndex = undefined; }
+  else if (s.street === 'turn') { s.board.push(take(s)); s.street = 'river'; s.toActIndex = firstToActPostflop(s); s.minRaise = s.bigBlind; s.lastAggressorIndex = undefined; }
   else if (s.street === 'river') { return showdown(s); }
   return s;
 }

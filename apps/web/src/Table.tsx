@@ -6,6 +6,9 @@ export default function Table({ state, onAction, onNextHand, onPlaceBet }:{ stat
   const positions = useMemo(() => seatPositions(n), [n]);
   const legalNote = `Hand ${state.handId} • ${state.street.toUpperCase()}${state.street==='showdown'?' • Showdown':''}`;
   const [betInput, setBetInput] = useState<string>('');
+  const humanIndex = state.players.findIndex(p => p.isHuman) ?? 0;
+  const currentHighest = Math.max(...state.players.map(pp=>pp.committed));
+  const toCall = Math.max(0, currentHighest - (state.players[humanIndex]?.committed ?? 0));
   return (
     <div style={{ fontFamily:'system-ui', padding:16 }}>
       <h2 style={{ margin:'0 0 12px 0' }}>Poker Practice</h2>
@@ -41,7 +44,7 @@ export default function Table({ state, onAction, onNextHand, onPlaceBet }:{ stat
       <div style={{ marginTop:16, display:'flex', gap:8, justifyContent:'center', flexWrap:'wrap', alignItems:'center' }}>
         <Button variant="muted" onClick={()=>onAction('FOLD')}>Fold</Button>
         <Button variant="muted" onClick={()=>onAction('CHECK')}>Check</Button>
-        <Button variant="primary" onClick={()=>onAction('CALL')}>Call</Button>
+  <Button variant="primary" onClick={()=>onAction('CALL')}>{toCall > 0 ? `Call ${toCall}` : 'Call'}</Button>
         <div style={{ display:'flex', gap:8, alignItems:'center' }}>
           <input
             type="number"
@@ -197,8 +200,8 @@ function ShowdownOverlay({ state, onNextHand }:{ state: TableState; onNextHand?:
   const results = state.showdown?.results || [];
   const winners = new Set(state.showdown?.winners || []);
   return (
-    <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'flex-end', justifyContent:'center', padding:'0 0 18px 0' }}>
-      <div style={{ background:'#111827', color:'#e5e7eb', borderRadius:12, padding:16, width:520, maxWidth:'96%', boxShadow:'0 10px 30px rgba(0,0,0,0.5)' }}>
+    <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.12)', display:'flex', alignItems:'flex-start', justifyContent:'center', padding:'110px 0 0 0', pointerEvents:'auto' }}>
+      <div style={{ background:'rgba(17,24,39,0.78)', color:'#e5e7eb', borderRadius:12, padding:16, width:520, maxWidth:'96%', boxShadow:'0 10px 30px rgba(0,0,0,0.28)', marginTop:0 }}>
         <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
           <div style={{ fontWeight:800, fontSize:18 }}>Showdown</div>
           <div style={{ opacity:0.8 }}>Pot {state.showdown?.totalPot ?? state.pot}</div>
@@ -219,12 +222,13 @@ function ShowdownOverlay({ state, onNextHand }:{ state: TableState; onNextHand?:
             </React.Fragment>
           ))}
         </div>
-        {onNextHand && (
-          <div style={{ display:'flex', justifyContent:'center', marginTop:14 }}>
-            <button onClick={onNextHand} style={{ padding:'8px 12px', borderRadius:8, background:'#ffd66b', color:'#111', fontWeight:700 }}>Next Hand</button>
-          </div>
-        )}
+        {/* Next Hand button moved below modal so it doesn't overlap top player's cards */}
       </div>
+      {onNextHand && (
+        <div style={{ position:'absolute', left:'50%', top:'58%', transform:'translate(-50%, -50%)', pointerEvents:'auto' }}>
+          <button onClick={onNextHand} style={{ padding:'8px 12px', borderRadius:8, background:'#ffd66b', color:'#111', fontWeight:700 }}>Next Hand</button>
+        </div>
+      )}
     </div>
   );
 }

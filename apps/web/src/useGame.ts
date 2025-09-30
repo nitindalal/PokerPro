@@ -39,10 +39,10 @@ export function useGame(numBots = 2) {
 
   const act = useCallback((playerIndex: number, action: Action) => {
     setState(s => {
-      let next = maybeAdvanceStreet(applyAction(s, playerIndex, action));
-      // let bots respond
-      next = botStep(next);
-      return next;
+      // Apply the player's action and let the UI update. Bots will react via
+      // the useEffect which runs after state changes, preventing immediate
+      // multi-street advances within the same update.
+      return maybeAdvanceStreet(applyAction(s, playerIndex, action));
     });
   }, [botStep]);
 
